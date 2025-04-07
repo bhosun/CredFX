@@ -115,7 +115,7 @@ http://localhost:3000/
     {
       "id": "d7944533-125c-49dc-b4c6-e90021e5f1d9",
       "userId": "7127106c-aa86-4fd0-a27d-6644a5cffff1",
-      "type": "DEPOSIT",
+      "type": "FUNDING",
       "currency": "NGN",
       "amount": 100000,
       "status": "COMPLETED",
