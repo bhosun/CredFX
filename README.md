@@ -182,6 +182,33 @@ http://localhost:3000/
     }
     ```
 
+## Key Assumptions
+- **Multi-currency Support**: The app supports NGN, USD, EUR and GBP with the potential for more currencies.
+- **Secure Authentication**: Users are authenticated via JWT tokens for a secure experience.
+- **Real-time Rates**: Exchange rates are fetched from an external service and updated regularly for currency conversion.
+
+## Architectural Decisions
+
+### Separation of Concerns
+- **Controllers**: Handle request routing, validation, and delegation.
+- **Services**: Contain business logic (e.g., wallet funding, currency conversion) and interact with repositories.
+
+### Database Transaction Management
+- **Atomic Transactions**: Ensured using `queryRunner` for wallet updates and currency conversions.
+- **Pessimistic Locking**: Prevents race conditions and double spending during wallet updates.
+
+### API Integration
+- **External Exchange API**: Used for real-time currency conversions with graceful failure handling in case of downtime or issues.
+
+### Error Handling & Response Consistency
+- **Custom Exceptions**: Implemented for consistent error handling (e.g., `BadRequestException`, `InternalServerErrorException`).
+- **Clear Responses**: Meaningful response codes and messages for clients.
+
+### Scalable Architecture
+- **Microservice-like Approach**: Isolated services for concerns like wallet and exchange management.
+- **Horizontal Scaling**: Designed for scalability and efficient traffic handling.
+
+
 
 ## Database Schema
 - Users: Stores user information and verification details
