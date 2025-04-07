@@ -1,4 +1,4 @@
-# Cred Fx Wallet NestJS Application
+# Cred FX Application
 
 ## Overview
 This is a FX Trading application that provides a multi-currency wallet system with user authentication, email verification, and wallet management features. Built with NestJS, Postgres, TypeORM.
