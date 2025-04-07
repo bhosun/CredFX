@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -50,31 +51,65 @@ export class WalletService {
   ): Promise<Transaction> {
     const { currency, amount, reference } = fundWalletDto;
 
-    if( currency !== CurrencyType.NGN) {
-      throw new BadRequestException('You can only fund your wallet in Naira (NGN), and convert to order currencies.');
+    if (currency !== CurrencyType.NGN) {
+      throw new BadRequestException(
+        'You can only fund your wallet in Naira (NGN), and convert to other currencies.',
+      );
     }
 
     if (amount <= 0) {
       throw new BadRequestException('Amount must be greater than zero');
     }
 
-    const wallet = await this.getWalletBalance(userId, currency);
-
-    const transaction = this.transactionRepository.create({
-      userId,
-      type: TransactionType.DEPOSIT,
-      currency,
-      amount,
-      reference,
-      status: TransactionStatus.COMPLETED,
-      description: `Wallet funding - ${currency}`,
+    const existing = await this.transactionRepository.findOne({
+      where: { reference },
     });
-    await this.transactionRepository.save(transaction);
+    if (existing) {
+      throw new ConflictException(
+        'Transaction with this reference already exists',
+      );
+    }
 
-    wallet.balance = Number(wallet.balance) + amount;
-    await this.walletRepository.save(wallet);
+    const queryRunner =
+      this.walletRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    return transaction;
+    try {
+      const wallet = await queryRunner.manager
+        .getRepository(Wallet)
+        .createQueryBuilder('wallet')
+        .setLock('pessimistic_write')
+        .where('wallet.userId = :userId', { userId })
+        .andWhere('wallet.currency = :currency', { currency })
+        .getOne();
+
+      if (!wallet) {
+        throw new NotFoundException('Wallet not found');
+      }
+
+      const transaction = this.transactionRepository.create({
+        userId,
+        type: TransactionType.FUNDING,
+        currency,
+        amount,
+        reference,
+        status: TransactionStatus.COMPLETED,
+        description: `Wallet funding - ${currency}`,
+      });
+      await queryRunner.manager.save(transaction);
+
+      wallet.balance = Number(wallet.balance) + amount;
+      await queryRunner.manager.save(wallet);
+
+      await queryRunner.commitTransaction();
+      return transaction;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async getTransactionHistory(userId: string): Promise<Transaction[]> {

@@ -3,7 +3,7 @@ import { User } from '../../users/entities/user.entity';
 import { CurrencyType } from './wallet.entity';
 
 export enum TransactionType {
-  DEPOSIT = 'DEPOSIT',
+  FUNDING = 'FUNDING',
   CONVERSION = 'CONVERSION',
   TRANSFER = 'TRANSFER'
 }

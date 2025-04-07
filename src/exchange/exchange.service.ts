@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
@@ -104,13 +105,18 @@ export class ExchangeService {
     amount,
     fromCurrency,
     toCurrency,
-  }: any): Promise<Transaction> {
+  }: {
+    userId: string;
+    amount: number;
+    fromCurrency: CurrencyType;
+    toCurrency: CurrencyType;
+  }): Promise<Transaction> {
     if (fromCurrency === toCurrency) {
-      throw new Error('Choose different currencies');
+      throw new BadRequestException('Choose different currencies');
     }
 
     if (fromCurrency !== CurrencyType.NGN && toCurrency !== CurrencyType.NGN) {
-      throw new Error(
+      throw new BadRequestException(
         'Conversion only allowed between Naira and other currencies',
       );
     }
@@ -121,25 +127,11 @@ export class ExchangeService {
     const toRate = this.rates[toCurrency];
 
     if (fromRate <= 0 || toRate <= 0) {
-      throw new Error('Invalid exchange rate values');
+      throw new InternalServerErrorException('Invalid exchange rate values');
     }
 
     const rate = toRate / fromRate;
     const convertedAmount = parseFloat((amount * rate).toFixed(2));
-
-    const fromWallet = await this.walletService.getWalletBalance(
-      userId,
-      fromCurrency,
-    );
-
-    if (Number(fromWallet.balance) < amount) {
-      throw new BadRequestException(`Insufficient ${fromCurrency} balance`);
-    }
-
-    const toWallet = await this.walletService.getWalletBalance(
-      userId,
-      toCurrency,
-    );
 
     const queryRunner =
       this.walletRepository.manager.connection.createQueryRunner();
@@ -147,6 +139,34 @@ export class ExchangeService {
     await queryRunner.startTransaction();
 
     try {
+      const fromWallet = await queryRunner.manager
+        .getRepository(Wallet)
+        .createQueryBuilder('wallet')
+        .setLock('pessimistic_write')
+        .where('wallet.userId = :userId', { userId })
+        .andWhere('wallet.currency = :currency', { currency: fromCurrency })
+        .getOne();
+
+      if (!fromWallet) {
+        throw new NotFoundException(`Wallet not found for ${fromCurrency}`);
+      }
+
+      if (Number(fromWallet.balance) < amount) {
+        throw new BadRequestException(`Insufficient ${fromCurrency} balance`);
+      }
+
+      const toWallet = await queryRunner.manager
+        .getRepository(Wallet)
+        .createQueryBuilder('wallet')
+        .setLock('pessimistic_write')
+        .where('wallet.userId = :userId', { userId })
+        .andWhere('wallet.currency = :currency', { currency: toCurrency })
+        .getOne();
+
+      if (!toWallet) {
+        throw new NotFoundException(`Wallet not found for ${toCurrency}`);
+      }
+
       fromWallet.balance = Number(fromWallet.balance) - amount;
       toWallet.balance = Number(toWallet.balance) + convertedAmount;
 
@@ -179,7 +199,6 @@ export class ExchangeService {
       await queryRunner.manager.save(creditTransaction);
 
       await queryRunner.commitTransaction();
-
       return creditTransaction;
     } catch (error) {
       await queryRunner.rollbackTransaction();

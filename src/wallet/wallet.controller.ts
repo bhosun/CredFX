@@ -3,11 +3,16 @@ import { WalletService } from './wallet.service';
 import { FundWalletDto } from './dto/fund-wallet.dto';
 import { CurrencyType } from './entities/wallet.entity';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { ConvertCurrencyDto } from 'src/exchange/dto/convert-currency.dto';
+import { ExchangeService } from 'src/exchange/exchange.service';
 
 @Controller('wallet')
 @UseGuards(JwtAuthGuard)
 export class WalletController {
-  constructor(private readonly walletService: WalletService) {}
+  constructor(
+    private readonly walletService: WalletService,
+    private readonly exchangeService: ExchangeService,
+  ) {}
 
   @Get()
   async getUserWallets(@Req() req) {
@@ -22,6 +27,15 @@ export class WalletController {
   @Post('fund')
   async fundWallet(@Req() req, @Body() fundWalletData: FundWalletDto) {
     return this.walletService.fundWallet(req.user.sub, fundWalletData);
+  }
+
+  @Post('convert')
+  async convertCurrency(@Req() req, @Body() currencyData: ConvertCurrencyDto) {
+    const data = {
+      ...currencyData,
+      userId: req.user.sub,
+    };
+    return this.exchangeService.convertCurrency(data);
   }
 
   @Get('transactions')
